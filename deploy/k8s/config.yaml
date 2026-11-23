@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flash-sale-config
+data:
+  DB_URL: jdbc:mysql://mysql:3306/flashsale?connectionTimeZone=UTC
+  DB_USERNAME: flashsale
+  REDIS_HOST: redis
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  SPRING_PROFILES_ACTIVE: demo
+  TZ: UTC

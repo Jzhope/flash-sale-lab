@@ -1,0 +1,29 @@
+name: verify
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Unit, API and real middleware integration tests
+        run: bash mvnw -B -ntp verify -Dintegration=true
+      - name: Validate Compose
+        run: docker compose --env-file .env.example config --quiet
+      - name: Build runtime image
+        run: docker build -t flash-sale-lab:ci .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: target/surefire-reports/
