@@ -16,6 +16,8 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
+      - name: Java format and lint
+        run: bash mvnw -B -ntp validate
       - name: Unit, API and real middleware integration tests
         run: bash mvnw -B -ntp verify -Dintegration=true
       - name: Validate Compose

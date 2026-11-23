@@ -76,6 +76,17 @@ $env:SPRING_PROFILES_ACTIVE='demo'
 
 See the [local verification record](docs/verification.md) for observed results and limits.
 
+## Code Style and Lint
+
+Spotless applies Google Java Format to production and test code, removes unused imports, and formats the Maven POM. Checkstyle checks explicit imports, required braces, one statement per line, naming conventions, and documentation for public types. Both checks run during Maven's `validate` phase, before compilation or tests, and are also required by CI.
+
+```powershell
+.\mvnw.cmd spotless:apply # Automatically format Java and pom.xml.
+.\mvnw.cmd validate       # Check formatting and Java lint without running tests.
+```
+
+On Linux or macOS, use `./mvnw spotless:apply` and `./mvnw validate`. Formatter and linter versions are pinned in `pom.xml`; `.editorconfig` sets UTF-8, line endings, and indentation defaults. Java comments explain component responsibilities and the transaction, concurrency, and delivery guarantees in Chinese for learners.
+
 ## Architecture
 
 ```mermaid

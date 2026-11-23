@@ -1,6 +1,7 @@
 FROM maven:3.9.11-eclipse-temurin-17 AS build
 WORKDIR /build
 COPY pom.xml .
+COPY config config
 RUN mvn -B -q dependency:go-offline
 COPY src src
 RUN mvn -B -q -DskipTests package
