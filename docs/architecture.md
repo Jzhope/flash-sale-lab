@@ -1,5 +1,13 @@
 # 事务与故障边界
 
+## 代码分层
+
+HTTP 业务流程遵循 `Controller → Service → Repository → MySQL`。Controller 校验请求、获取认证身份、转换 DTO；Service 决定业务规则和事务边界；Repository 执行 SQL 和结果映射。Model 表示内部数据，DTO 表示公开 JSON。
+
+订单状态和事件类型分别由 `OrderStatus`、`OrderEventType` 枚举定义。支付、取消、过期分别有明确的公开 Service 方法；它们通过 Spring 事务代理进入同一个私有状态转换流程。不要把事务注解只放到私有方法上，也不要在同一个类内通过自调用绕过事务入口。
+
+`BearerTokenFilter` 只处理认证，`NotificationConsumer` 只解析消息并调用通知 Service。定时任务只触发处理，不复制业务规则。`ArchitectureTest` 防止 Controller 依赖 Repository、非 Repository 层使用 JDBC，以及底层业务依赖 Controller。
+
 ## 下单事务
 
 1. HTTP 参数校验，Redis Lua 用户限流。

@@ -43,7 +43,7 @@ Stopping preserves data. Removing named volumes deletes their MySQL orders or Ka
 
 ## Development and Tests
 
-Use JDK 17 or later and configure `JAVA_HOME` for your installation. Maven Wrapper is included.
+Use JDK 17, the version used by CI, and configure `JAVA_HOME` for your installation. Maven Wrapper is included.
 
 ```powershell
 .\mvnw.cmd test
@@ -73,6 +73,7 @@ $env:SPRING_PROFILES_ACTIVE='demo'
 | Redis | Real cache reads/writes, Lua admission limits, key expiration |
 | Kafka | Real delivery, duplicate-event handling, poison-message routing to the DLT |
 | Broker failure | Unacknowledged events are not marked as published |
+| Refactoring safety | Stable order JSON, rollback during all state changes, and enforced layer dependencies |
 
 See the [local verification record](docs/verification.md) for observed results and limits.
 
@@ -101,7 +102,9 @@ flowchart LR
     Kafka --> DLT[Failed Records: order-events.DLT]
 ```
 
-This is a modular monolith. Each replica serves HTTP requests, polls the Outbox, and consumes Kafka events. SQL row locks and unique constraints coordinate instances; a Kafka consumer group distributes partitions. Inventory and authentication state are shared through the database.
+This is a single Spring Boot application with explicit layers: controllers handle HTTP and DTO mapping, services own business rules and transaction boundaries, and repositories contain SQL. Models represent internal data; DTOs define public JSON contracts. Architecture tests prevent controllers from accessing repositories and keep JDBC inside repositories.
+
+Each replica serves HTTP requests, polls the Outbox, and consumes Kafka events. SQL row locks and unique constraints coordinate instances; a Kafka consumer group distributes partitions. Inventory and authentication state are shared through the database.
 
 Stock reservation uses `UPDATE products SET stock=stock-? WHERE id=? AND stock>=?`. Keeping the decision inside SQL gives inventory and order creation one transaction boundary. Redis stock pre-reservation would require extra reconciliation and compensation, so Redis is used for caching and admission control.
 
@@ -111,6 +114,7 @@ Outbox events are marked as published only after Kafka acknowledges them. A cras
 
 Supplemental guides, currently in Chinese:
 
+- [Beginner reading path: follow one order through the application](docs/learning-guide.md)
 - [Transactions, failure boundaries, and design tradeoffs](docs/architecture.md)
 - [REST API reference and request examples](docs/api.md)
 - [Linux operations, Kubernetes setup, and JVM diagnostics](docs/operations.md)
@@ -133,11 +137,16 @@ Thresholds check business outcomes without assuming a request rate. Registration
 
 ```text
 src/main/java/dev/jzhope/flashsale/
-  auth/       Accounts and Bearer tokens
-  catalog/    Product catalog and cache
-  order/      Inventory, idempotency, state transitions, expiration
-  event/      Outbox, Kafka, notifications, dead-letter handling
-  api/        Consistent error responses
+  controller/ HTTP endpoints; request validation and DTO mapping
+  service/    Business rules, transaction boundaries, cache/admission policy
+  repository/ SQL statements and row mapping
+  dto/        Public request and response contracts
+  model/      Internal data and typed order status
+  messaging/  Kafka adapters, event contracts, transactional Outbox writer
+  task/       Scheduled expiration and Outbox publishing
+  config/     Spring Security and Kafka configuration
+  security/   Bearer authentication filter
+  exception/  Consistent API error responses
 src/main/resources/db/  Flyway migrations and demo catalog
 src/test/              Fast tests and real middleware integration tests
 deploy/k8s/            Local Kubernetes learning deployment
@@ -145,6 +154,8 @@ load/                  k6 concurrency scenario
 scripts/               End-to-end smoke test
 docs/                  API, architecture, operations, verification
 ```
+
+Start with the [learning guide](docs/learning-guide.md). Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing transaction boundaries, event contracts, or public responses.
 
 ## Deployment Limits
 

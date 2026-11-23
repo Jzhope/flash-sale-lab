@@ -4,7 +4,9 @@ Validated on Windows with Java 17, Docker Desktop using Linux containers, and a 
 
 ## Automated Tests
 
-`mvn verify -Dintegration=true` passed all 15 tests, with no failures, errors, or skipped tests: 2 authentication tests, 1 order API test, 8 order service tests, 1 publisher-failure test, and 3 real middleware integration tests.
+After the layering refactor, `mvn clean verify -Dintegration=true` passed all 28 tests with no failures, errors, or skipped tests: 2 authentication tests, 2 order API tests, 11 order service tests, 5 cache tests, 1 publisher-failure test, 3 real middleware integration tests, and 4 architecture rules.
+
+The additional coverage verifies that public order JSON stays compatible, payment/cancellation/expiration roll back when Outbox writes fail, invalid or unavailable cache entries fall back to SQL, and JDBC remains inside repositories. Spotless and Checkstyle also passed through the Maven validation phase.
 
 ## Container Verification
 
