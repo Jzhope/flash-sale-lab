@@ -25,6 +25,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 15
+  kafka-init:
+    image: apache/kafka:4.1.2
+    user: '0:0'
+    entrypoint: ["/bin/sh", "-c", "chown 1000:1000 /data"]
+    volumes: ["kafka-data:/data"]
   kafka:
     image: apache/kafka:4.1.2
     ports: ["127.0.0.1:9092:9092"]
@@ -44,6 +49,8 @@ services:
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
     volumes: ["kafka-data:/tmp/kraft-combined-logs"]
+    depends_on:
+      kafka-init: {condition: service_completed_successfully}
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:19092 --list >/dev/null 2>&1"]
       interval: 10s

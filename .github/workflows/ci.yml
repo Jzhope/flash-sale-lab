@@ -21,7 +21,15 @@ jobs:
       - name: Validate Compose
         run: docker compose --env-file .env.example config --quiet
       - name: Build runtime image
-        run: docker build -t flash-sale-lab:ci .
+        run: docker build -t flash-sale-lab:local .
+      - name: Start full Compose stack
+        run: docker compose --env-file .env.example up -d --no-build --wait --wait-timeout 180
+      - name: End-to-end API smoke test
+        shell: pwsh
+        run: ./scripts/smoke.ps1
+      - name: Stop demo containers
+        if: always()
+        run: docker compose --env-file .env.example stop
       - uses: actions/upload-artifact@v4
         if: always()
         with:
