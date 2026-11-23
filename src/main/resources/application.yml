@@ -1,0 +1,61 @@
+spring:
+  application:
+    name: flash-sale-lab
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/flashsale?connectionTimeZone=UTC}
+    username: ${DB_USERNAME:flashsale}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 16
+      connection-timeout: 5000
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 1s
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        delivery.timeout.ms: 10000
+        request.timeout.ms: 5000
+        max.block.ms: 5000
+    consumer:
+      group-id: notification-workers
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
+  jackson:
+    time-zone: UTC
+server:
+  shutdown: graceful
+  error:
+    include-message: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db,redis
+app:
+  messaging-enabled: ${MESSAGING_ENABLED:true}
+  outbox-delay-ms: 1000
+  expiry-delay-ms: 15000
+  order-ttl-seconds: 900
+  auth-ttl-hours: 24
+  rate-limit:
+    requests: 10
+    window-seconds: 10
