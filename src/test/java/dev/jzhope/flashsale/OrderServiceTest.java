@@ -2,13 +2,16 @@ package dev.jzhope.flashsale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
-import dev.jzhope.flashsale.api.ApiException;
-import dev.jzhope.flashsale.event.EventStore;
-import dev.jzhope.flashsale.order.OrderService;
+import dev.jzhope.flashsale.exception.ApiException;
+import dev.jzhope.flashsale.messaging.OrderEventType;
+import dev.jzhope.flashsale.messaging.OrderEventWriter;
+import dev.jzhope.flashsale.model.OrderStatus;
+import dev.jzhope.flashsale.service.OrderService;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
@@ -31,7 +34,7 @@ class OrderServiceTest {
   @Autowired OrderService orders;
   @Autowired JdbcTemplate db;
   @MockitoBean Clock clock;
-  @MockitoSpyBean EventStore events;
+  @MockitoSpyBean OrderEventWriter events;
   static final Instant NOW = Instant.parse("2026-01-01T00:00:00Z");
 
   @BeforeEach
@@ -124,20 +127,18 @@ class OrderServiceTest {
   @Test
   void cancellationRestoresStockExactlyOnce() {
     var order = orders.create("u0", "key", 1, 3);
-    orders.transition("u0", order.id(), "cancel");
-    orders.transition("u0", order.id(), "cancel");
+    orders.cancel("u0", order.id());
+    orders.cancel("u0", order.id());
     assertThat(stock()).isEqualTo(20);
-    assertThatThrownBy(() -> orders.transition("u0", order.id(), "pay"))
-        .isInstanceOf(ApiException.class);
+    assertThatThrownBy(() -> orders.pay("u0", order.id())).isInstanceOf(ApiException.class);
   }
 
   @Test
   void paidOrdersCannotBeCancelled() {
     var order = orders.create("u0", "key", 1, 1);
-    assertThat(orders.transition("u0", order.id(), "pay").status()).isEqualTo("PAID");
-    orders.transition("u0", order.id(), "pay");
-    assertThatThrownBy(() -> orders.transition("u0", order.id(), "cancel"))
-        .isInstanceOf(ApiException.class);
+    assertThat(orders.pay("u0", order.id()).status()).isEqualTo(OrderStatus.PAID);
+    orders.pay("u0", order.id());
+    assertThatThrownBy(() -> orders.cancel("u0", order.id())).isInstanceOf(ApiException.class);
     assertThat(stock()).isEqualTo(19);
   }
 
@@ -145,8 +146,8 @@ class OrderServiceTest {
   void latePaymentExpiresOrderAndRestoresStock() {
     var order = orders.create("u0", "key", 1, 2);
     when(clock.instant()).thenReturn(NOW.plusSeconds(901));
-    assertThat(orders.transition("u0", order.id(), "pay").status()).isEqualTo("EXPIRED");
-    orders.transition("u0", order.id(), "expire");
+    assertThat(orders.pay("u0", order.id()).status()).isEqualTo(OrderStatus.EXPIRED);
+    orders.expire("u0", order.id());
     assertThat(stock()).isEqualTo(20);
   }
 
@@ -154,20 +155,57 @@ class OrderServiceTest {
   void anotherUserCannotReadOrChangeOrder() {
     var order = orders.create("u0", "key", 1, 1);
     assertThatThrownBy(() -> orders.get("u1", order.id())).isInstanceOf(ApiException.class);
-    assertThatThrownBy(() -> orders.transition("u1", order.id(), "pay"))
-        .isInstanceOf(ApiException.class);
+    assertThatThrownBy(() -> orders.pay("u1", order.id())).isInstanceOf(ApiException.class);
   }
 
   @Test
   void failedOutboxWriteRollsBackInventoryAndOrder() {
-    EventStore target = org.springframework.test.util.AopTestUtils.getUltimateTargetObject(events);
+    OrderEventWriter target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(events);
     doThrow(new IllegalStateException("injected outbox failure"))
         .when(target)
-        .append(anyString(), anyString(), anyString());
+        .append(any(OrderEventType.class), anyString(), anyString());
     assertThatThrownBy(() -> orders.create("u0", "key", 1, 1))
         .hasMessageContaining("outbox failure");
     assertThat(stock()).isEqualTo(20);
     assertThat(db.queryForObject("SELECT COUNT(*) FROM sale_orders", Integer.class)).isZero();
+  }
+
+  @Test
+  void failedPaymentEventRollsBackState() {
+    var order = orders.create("u0", "key", 1, 1);
+    failNextEvent();
+    assertTransitionRollsBack(() -> orders.pay("u0", order.id()), order.id());
+  }
+
+  @Test
+  void failedCancellationEventRollsBackStateAndStockRelease() {
+    var order = orders.create("u0", "key", 1, 1);
+    failNextEvent();
+    assertTransitionRollsBack(() -> orders.cancel("u0", order.id()), order.id());
+  }
+
+  @Test
+  void failedExpirationEventRollsBackStateAndStockRelease() {
+    var order = orders.create("u0", "key", 1, 1);
+    when(clock.instant()).thenReturn(NOW.plusSeconds(901));
+    failNextEvent();
+    assertTransitionRollsBack(() -> orders.expire("u0", order.id()), order.id());
+  }
+
+  private void failNextEvent() {
+    OrderEventWriter target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(events);
+    doThrow(new IllegalStateException("injected outbox failure"))
+        .when(target)
+        .append(any(OrderEventType.class), anyString(), anyString());
+  }
+
+  private void assertTransitionRollsBack(Runnable transition, String orderId) {
+    assertThatThrownBy(transition::run).hasMessageContaining("outbox failure");
+    assertThat(orders.get("u0", orderId).status()).isEqualTo(OrderStatus.PENDING);
+    assertThat(stock()).isEqualTo(19);
+    assertThat(db.queryForObject("SELECT COUNT(*) FROM outbox_events", Integer.class)).isEqualTo(1);
   }
 
   private int stock() {

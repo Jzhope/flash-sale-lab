@@ -5,13 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.jzhope.flashsale.api.ApiException;
-import dev.jzhope.flashsale.auth.AuthService;
-import dev.jzhope.flashsale.catalog.ProductService;
-import dev.jzhope.flashsale.event.KafkaConfig;
-import dev.jzhope.flashsale.event.OutboxPublisher;
-import dev.jzhope.flashsale.order.OrderService;
-import dev.jzhope.flashsale.order.RateLimiter;
+import dev.jzhope.flashsale.config.KafkaConfig;
+import dev.jzhope.flashsale.exception.ApiException;
+import dev.jzhope.flashsale.messaging.OrderEventType;
+import dev.jzhope.flashsale.messaging.OutboxPublisher;
+import dev.jzhope.flashsale.service.AuthService;
+import dev.jzhope.flashsale.service.OrderService;
+import dev.jzhope.flashsale.service.ProductService;
+import dev.jzhope.flashsale.service.RateLimiter;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -104,8 +105,12 @@ class MiddlewareIntegrationTest {
     kafka.send(KafkaConfig.TOPIC, order.id(), payload).get(10, TimeUnit.SECONDS);
     // A later marker on the same partition proves the duplicate was consumed first.
     var marker =
-        new dev.jzhope.flashsale.event.OrderEvent(
-            UUID.randomUUID().toString(), "ORDER_CREATED", order.id(), user, Instant.now());
+        new dev.jzhope.flashsale.messaging.OrderEvent(
+            UUID.randomUUID().toString(),
+            OrderEventType.ORDER_CREATED,
+            order.id(),
+            user,
+            Instant.now());
     kafka
         .send(
             KafkaConfig.TOPIC,
