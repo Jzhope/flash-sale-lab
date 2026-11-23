@@ -1,0 +1,20 @@
+package dev.jzhope.flashsale.order;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+@Component
+public class OrderExpiryJob {
+    private static final Logger log=LoggerFactory.getLogger(OrderExpiryJob.class);
+    private final OrderService orders;
+    public OrderExpiryJob(OrderService orders) { this.orders=orders; }
+    @Scheduled(initialDelayString="${app.expiry-delay-ms}",fixedDelayString="${app.expiry-delay-ms}")
+    public void expire() {
+        for (var order:orders.expiredCandidates()) {
+            try { orders.transition(order.userId(),order.id(),"expire"); }
+            catch (RuntimeException ex) { log.warn("Expiry will retry order {}",order.id(),ex); }
+        }
+    }
+}

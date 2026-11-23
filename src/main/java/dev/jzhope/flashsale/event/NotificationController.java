@@ -1,0 +1,18 @@
+package dev.jzhope.flashsale.event;
+
+import java.security.Principal;
+import java.time.Instant;
+import java.util.List;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.bind.annotation.*;
+
+@RestController @RequestMapping("/api/notifications")
+public class NotificationController {
+    private final JdbcTemplate db;
+    public NotificationController(JdbcTemplate db) { this.db=db; }
+    public record Notification(String eventId,String orderId,String type,Instant createdAt) {}
+    @GetMapping public List<Notification> list(Principal user) {
+        return db.query("SELECT event_id,order_id,event_type,created_at FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 100",
+                (rs,i)->new Notification(rs.getString(1),rs.getString(2),rs.getString(3),rs.getTimestamp(4).toInstant()),user.getName());
+    }
+}
