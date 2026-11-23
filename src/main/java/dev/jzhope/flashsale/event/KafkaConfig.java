@@ -16,7 +16,8 @@ public class KafkaConfig {
     @Bean NewTopic orderEvents() { return TopicBuilder.name(TOPIC).partitions(3).replicas(1).build(); }
     @Bean NewTopic deadLetters() { return TopicBuilder.name(TOPIC+".DLT").partitions(3).replicas(1).build(); }
     @Bean DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<String,String> template) {
-        var recoverer=new DeadLetterPublishingRecoverer(template);
+        var recoverer=new DeadLetterPublishingRecoverer(template,
+                (record,exception)->new org.apache.kafka.common.TopicPartition(TOPIC+".DLT",record.partition()));
         recoverer.setFailIfSendResultIsError(true);
         return new DefaultErrorHandler(recoverer,new FixedBackOff(1000L,2L));
     }

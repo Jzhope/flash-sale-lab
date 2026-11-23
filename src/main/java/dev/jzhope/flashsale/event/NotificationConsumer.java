@@ -22,7 +22,7 @@ public class NotificationConsumer {
     public void receive(String payload) throws JsonProcessingException {
         OrderEvent event=json.readValue(payload,OrderEvent.class);
         if(event==null || event.eventId()==null || event.eventId().length()!=36 || event.orderId()==null || event.orderId().length()!=36
-                || event.userId()==null || event.userId().length()>36 || event.occurredAt()==null || !TYPES.contains(event.type()))
+                || event.userId()==null || event.userId().isBlank() || event.userId().length()>36 || event.occurredAt()==null || event.type()==null || !TYPES.contains(event.type()))
             throw new IllegalArgumentException("Invalid order event");
         try {
             db.update("INSERT INTO notifications(event_id,user_id,order_id,event_type,created_at) VALUES (?,?,?,?,?)",
